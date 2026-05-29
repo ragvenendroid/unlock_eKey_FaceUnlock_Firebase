@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "230428038610",
+    "project_id": "smartlock-f85d5",
+    "storage_bucket": "smartlock-f85d5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:230428038610:android:9a4f9c06b6a12529c9e40b",
+        "android_client_info": {
+          "package_name": "com.example.smartlock"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwf80KmeC7ubWI_m6hGkXUVMYRnPpD8iM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:230428038610:android:6a20029494c52283c9e40b",
+        "android_client_info": {
+          "package_name": "com.smartlock.smartlock"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwf80KmeC7ubWI_m6hGkXUVMYRnPpD8iM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

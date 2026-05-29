@@ -1,0 +1,32 @@
+name: smartlock
+description: SmartLock - BLE lock control with ekey sharing
+
+publish_to: 'none'
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # TTLock BLE SDK
+  ttlock_flutter: ^0.3.8
+
+  # Firebase
+  firebase_core: ^3.0.0
+  firebase_auth: ^5.0.0
+  cloud_firestore: ^5.0.0
+
+  # HTTP for TTLock cloud API
+  http: ^1.2.0
+
+  # UI
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
