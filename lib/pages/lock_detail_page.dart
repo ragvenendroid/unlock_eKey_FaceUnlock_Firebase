@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:ttlock_flutter/ttlock.dart';
 import '../models/lock_model.dart';
 import '../models/ekey_model.dart';
 import '../services/firebase_service.dart';
 import 'face_lock_page.dart';
+import 'home_page.dart';
 
 class LockDetailPage extends StatefulWidget {
   final LockModel lock;
@@ -16,6 +18,107 @@ class LockDetailPage extends StatefulWidget {
 class _LockDetailPageState extends State<LockDetailPage> {
   bool _unlocking = false;
   String _unlockStatus = '';
+
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  }
+
+  void _resetL() async {
+
+    // Show confirmation first
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Lock'),
+        content: const Text(
+            'This will reset the lock and remove it from your account. You will need to initialize it again.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reset', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    _showLoadingDialog();
+
+    TTLock.resetLock(
+      widget.lock.lockData,
+          () async {
+        // ── Delete lock + subcollections from Firestore ──
+        try {
+          // Delete all faces
+          final facesSnap = await FirebaseFirestore.instance
+              .collection('locks')
+              .doc(widget.lock.lockId)
+              .collection('faces')
+              .get();
+          for (final doc in facesSnap.docs) {
+            await doc.reference.delete();
+          }
+
+          // Delete all sent ekeys for this lock
+          final ekeysSnap = await FirebaseFirestore.instance
+              .collection('ekeys')
+              .where('lockId', isEqualTo: widget.lock.lockId)
+              .get();
+          for (final doc in ekeysSnap.docs) {
+            await doc.reference.delete();
+          }
+
+          // Delete the lock document itself
+          await FirebaseFirestore.instance
+              .collection('locks')
+              .doc(widget.lock.lockId)
+              .delete();
+
+        } catch (e) {
+          debugPrint('Firestore cleanup error: $e');
+        }
+
+        // Close loading dialog
+        if (mounted) Navigator.of(context).pop();
+
+        // Go to home
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomePage()),
+                (route) => false,
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Lock reset successfully. You can now re-initialize it.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      },
+          (errorCode, errorMsg) {
+        if (mounted) Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Reset Failed: $errorMsg'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      },
+    );
+  }
 
   // ── Owner BLE Unlock button ───────────────────────────────────────────────
   void _unlock() {
@@ -156,6 +259,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -237,7 +341,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
 
             const SizedBox(height: 12),
 
-            // Add face lock button
+            // Add face & manage lock button
             ElevatedButton.icon(
               onPressed: () => Navigator.push(
                 context,
@@ -252,7 +356,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
 
               icon: const Icon(Icons.face),
 
-              label: const Text('Add & Manage Face Lock'),
+              label: const Text('Add Face Lock'),
 
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepPurple,
@@ -260,9 +364,19 @@ class _LockDetailPageState extends State<LockDetailPage> {
               ),
             ),
 
+            const SizedBox(height: 12),
+
+            // reset button
+            ElevatedButton.icon(
+              onPressed: _resetL,
+              icon: const Icon(Icons.lock_reset),
+              label: const Text('Reset Lock'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+            ),
+
             const SizedBox(height: 20),
 
-            // Sent ekeys list
+            // Sent ekeys list history down below buttons
             const Text(
               'Sent Ekeys',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),

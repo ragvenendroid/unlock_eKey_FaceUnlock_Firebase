@@ -11,7 +11,7 @@ class ScanPage extends StatefulWidget {
 }
 
 class _ScanPageState extends State<ScanPage> {
-  final List<Map> _devices = [];        // store raw Map
+  final List<Map> _devices = []; // store raw Map
   bool _scanning = false;
   String _status = 'Tap Scan to find nearby locks';
 
@@ -37,14 +37,14 @@ class _ScanPageState extends State<ScanPage> {
       if (!exists && mac.isNotEmpty) {
         // Store as Map using the same keys TTLockScanModel uses
         setState(() => _devices.add({
-          'lockMac': model.lockMac,
-          'lockName': model.lockName,
-          'electricQuantity': model.electricQuantity,
-          'isInited': model.isInited,
-          'isAllowUnlock': model.isAllowUnlock,
-          'lockVersion': model.lockVersion,
-          'rssi': model.rssi,
-        }));
+              'lockMac': model.lockMac,
+              'lockName': model.lockName,
+              'electricQuantity': model.electricQuantity,
+              'isInited': model.isInited,
+              'isAllowUnlock': model.isAllowUnlock,
+              'lockVersion': model.lockVersion,
+              'rssi': model.rssi,
+            }));
       }
     });
 
@@ -67,7 +67,7 @@ class _ScanPageState extends State<ScanPage> {
 
     TTLock.initLock(
       device,
-          (lockData) async {
+      (lockData) async {
         try {
           final lockMac = device['lockMac'] as String? ?? '';
           final lockName = device['lockName'] as String? ?? '';
@@ -98,7 +98,7 @@ class _ScanPageState extends State<ScanPage> {
           if (mounted) setState(() => _status = 'Failed: $e');
         }
       },
-          (errorCode, errorMsg) {
+      (errorCode, errorMsg) {
         if (mounted) {
           setState(() => _status = 'Init failed: $errorMsg ($errorCode)');
         }
@@ -139,51 +139,49 @@ class _ScanPageState extends State<ScanPage> {
               ),
             ),
             const SizedBox(height: 16),
-
             ElevatedButton.icon(
               onPressed: _scanning ? null : _startScan,
               icon: const Icon(Icons.bluetooth_searching),
               label: Text(_scanning ? 'Scanning...' : 'Scan for Locks'),
             ),
             const SizedBox(height: 16),
-
             Expanded(
               child: _devices.isEmpty
                   ? const Center(
-                child: Text(
-                  'Make sure your lock is in\ninitialization mode (reset).',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              )
+                      child: Text(
+                        'Make sure your lock is in\ninitialization mode (reset).',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
                   : ListView.separated(
-                itemCount: _devices.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, i) {
-                  final device = _devices[i];
-                  final mac = device['lockMac'] ?? 'Unknown';
-                  final name = device['lockName'] ?? '';
-                  final rssi = device['rssi'] ?? 0;
-                  return Card(
-                    child: ListTile(
-                      leading: const CircleAvatar(
-                        backgroundColor: Colors.indigo,
-                        child: Icon(Icons.bluetooth, color: Colors.white),
-                      ),
-                      title: Text(name.toString().isNotEmpty
-                          ? name.toString()
-                          : mac.toString()),
-                      subtitle: Text('MAC: $mac  RSSI: $rssi'),
-                      trailing: ElevatedButton(
-                        onPressed: () => _initializeLock(device),
-                        style: ElevatedButton.styleFrom(
-                            minimumSize: const Size(80, 36)),
-                        child: const Text('Add'),
-                      ),
+                      itemCount: _devices.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, i) {
+                        final device = _devices[i];
+                        final mac = device['lockMac'] ?? 'Unknown';
+                        final name = device['lockName'] ?? '';
+                        final rssi = device['rssi'] ?? 0;
+                        return Card(
+                          child: ListTile(
+                            leading: const CircleAvatar(
+                              backgroundColor: Colors.indigo,
+                              child: Icon(Icons.bluetooth, color: Colors.white),
+                            ),
+                            title: Text(name.toString().isNotEmpty
+                                ? name.toString()
+                                : mac.toString()),
+                            subtitle: Text('MAC: $mac  RSSI: $rssi'),
+                            trailing: ElevatedButton(
+                              onPressed: () => _initializeLock(device),
+                              style: ElevatedButton.styleFrom(
+                                  minimumSize: const Size(80, 36)),
+                              child: const Text('Add'),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),

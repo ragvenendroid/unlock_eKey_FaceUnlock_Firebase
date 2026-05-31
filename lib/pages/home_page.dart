@@ -50,7 +50,7 @@ class HomePage extends StatelessWidget {
         body: TabBarView(
           children: [
 
-            // ── Tab 1: My Locks (Owner) ─────────────────────────
+            // ── Tab 1: My Locks (Owner) ─────────────────────────>
             StreamBuilder<List<LockModel>>(
               stream: FirebaseService.getMyLocks(),
               builder: (context, snap) {
