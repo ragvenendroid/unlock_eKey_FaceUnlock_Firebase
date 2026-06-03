@@ -59,6 +59,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
     TTLock.resetLock(
       widget.lock.lockData,
           () async {
+
         // ── Delete lock + subcollections from Firestore ──
         try {
           // Delete all faces
@@ -206,6 +207,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
               ],
             ],
           ),
+
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -259,7 +261,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
     );
   }
 
-
+// ui only ----->
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -366,7 +368,30 @@ class _LockDetailPageState extends State<LockDetailPage> {
 
             const SizedBox(height: 12),
 
-            // reset button
+            // Add Timed Face Lock button ->
+            ElevatedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => FaceLockPage(
+                    lockData: widget.lock.lockData,
+                    lockName: widget.lock.lockName,
+                    lockId: widget.lock.lockId,
+                    isTimed: true,   // ← THIS is the only difference
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.timer),
+              label: const Text('Add Timed Face Lock'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orangeAccent,
+                minimumSize: const Size(double.infinity, 52),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // reset button -> reset lock fn
             ElevatedButton.icon(
               onPressed: _resetL,
               icon: const Icon(Icons.lock_reset),
@@ -378,7 +403,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
 
             // Sent ekeys list history down below buttons
             const Text(
-              'Sent Ekeys',
+              'Sent Ekeys History-',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
 
