@@ -17,12 +17,12 @@ class FaceLockPage extends StatefulWidget {
   final bool isTimed;
 
   const FaceLockPage({
-    Key ? key,
+    Key? key,
     required this.lockData,
     required this.lockName,
     required this.lockId,
     this.isTimed = false,
-  }) : super(key : key);
+  }) : super(key: key);
 
   @override
   State<FaceLockPage> createState() => _FaceLockPageState();
@@ -54,12 +54,12 @@ class _FaceLockPageState extends State<FaceLockPage> {
   // Stores metadata -> saved document which is in firebase firestore
   // No biometric data stored -> Only metadata.
   Future<void> _saveFaceToFirestore(
-      String faceNumber,
-      String name,
-      int startDate,
-      int endDate,
-      bool isTimed,
-      ) async {
+    String faceNumber,
+    String name,
+    int startDate,
+    int endDate,
+    bool isTimed,
+  ) async {
     await _db
         .collection('locks')
         .doc(widget.lockId)
@@ -86,7 +86,6 @@ class _FaceLockPageState extends State<FaceLockPage> {
         .delete();
   }
 
-
   Future<void> _clearAllFacesFromFirestore() async {
     final snap = await _db
         .collection('locks')
@@ -98,87 +97,46 @@ class _FaceLockPageState extends State<FaceLockPage> {
     }
   }
 
-  // ── ADD FACE — starts BLE scan ───────(flow)────────────>
-  // TTLock.addFace()
-  //       ↓
-  // BLE Communication
-  //       ↓
-  // Face Captured
-  //       ↓
-  // Receive faceNumber
-  //       ↓
-  // Show Dialog
+  // step 2 -> addFace fn
+  // It checks: widget.isTimed == true or widget.isTimed == false
+  // a) if true -> widget.isTimed == true
+  // Add Face
+  //     ↓
+  // _showTimedDialog()
+
+  // b) if false -> widget.isTimed == false
+  // Add Face
+  //     ↓
+  // _showNameDialog()
   void _addFace() {
-    _setStatus('Initializing face scan...', loading: true);
-
-    final int startDate = DateTime.now().millisecondsSinceEpoch;
-
-    // For timed: default 24hr; for permanent: 1 year
-    final int endDate = widget.isTimed
-        ? startDate + (24 * 60 * 60 * 1000)
-        : startDate + (365 * 24 * 60 * 60 * 1000);
-
-    TTLock.addFace(
-      null,
-      startDate,
-      endDate,
-      widget.lockData,
-
-          // Progress Callback -> Runs continuously.
-          (TTFaceState state, TTFaceErrorCode faceErrorCode) {
-        if (state == TTFaceState.canStartAdd) {
-          _setStatus('Face detected! Hold still...', loading: true);
-        } else if (state == TTFaceState.error) {
-          _setStatus(_faceErrorMessage(faceErrorCode), loading: true);
-        }
-      },
-
-          // Success Callback
-          (String faceNumber) {
-          _setStatus('Face scanned! Fill in details...', success: true);
-
-          // Dialog Selection ->
-          // Show different dialog based on mode
-          // widget.isTimed == true -> _showTimedDialog(...)
-        if (widget.isTimed) {
-          _showTimedDialog(faceNumber);
-        } else {
-          _showNameDialog(faceNumber);
-        }
-      },
-          (errorCode, errorMsg) {
-        _setStatus('Failed: $errorMsg ($errorCode)');
-      },
-    );
+    if (widget.isTimed) {
+      _showTimedDialog();
+    } else {
+      _showNameDialog();
+    }
   }
 
   // ── NORMAL name dialog (permanent) ────────────────────>
-  void _showNameDialog(String faceNumber) {
+  void _showNameDialog() {
     final nameCtrl = TextEditingController();
-    final int startDate = DateTime.now().millisecondsSinceEpoch;
-    final int endDate = startDate + (365 * 24 * 60 * 60 * 1000);
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        bool saving = false;
+        bool scanning = false;
         return StatefulBuilder(
           builder: (ctx, setDlgState) => AlertDialog(
-            title: const Text('Name this Face'),
+            title: const Row(
+              children: [
+                Icon(Icons.face, color: Colors.green),
+                SizedBox(width: 8),
+                Text('Add Face'),
+              ],
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 48),
-                const SizedBox(height: 12),
-                Text(
-                  'Face registered!\nID: $faceNumber',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-
-                const SizedBox(height: 16),
-
                 TextField(
                   controller: nameCtrl,
                   autofocus: true,
@@ -190,50 +148,67 @@ class _FaceLockPageState extends State<FaceLockPage> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                const SizedBox(height: 16),
+                // Container(
+                //   padding: const EdgeInsets.all(10),
+                //   decoration: BoxDecoration(
+                //     color: Colors.green.shade50,
+                //     borderRadius: BorderRadius.circular(8),
+                //     border: Border.all(color: Colors.green),
+                //   ),
+                //   child: const Text(
+                //     'After tapping Start Scan, stand in front of the lock camera.',
+                //     style: TextStyle(fontSize: 12, color: Colors.green),
+                //   ),
+                // ),
               ],
             ),
             actions: [
-              if (!saving)
-                TextButton(
-                  onPressed: () async {
-                    setDlgState(() => saving = true);
-                    await _saveFaceToFirestore(
-                        faceNumber, 'Unknown', startDate, endDate, false);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    _setStatus('Face saved as Unknown.', success: true);
-                  },
-                  child: const Text('Skip'),
-                ),
-              saving
-                  ? const Padding(
-                padding:
-                EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-                  : ElevatedButton(
-                onPressed: () async {
-                  final name = nameCtrl.text.trim();
-                  if (name.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter a name'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                    return;
-                  }
-                  setDlgState(() => saving = true);
-                  await _saveFaceToFirestore(
-                      faceNumber, name, startDate, endDate, false);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  _setStatus('Face saved for $name!', success: true);
-                },
-                child: const Text('Save'),
+              TextButton(
+                onPressed: scanning ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
               ),
+              scanning
+                  ? const Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: () {
+                        final name = nameCtrl.text.trim();
+                        if (name.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please enter a name'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                          return;
+                        }
+                        setDlgState(() => scanning = true);
+                        Navigator.pop(ctx);
+
+                        // step -> 3
+                        // after tapping - Start Scan & Save
+                        // the details such as name, startDate, endDate & faceScan at last
+                        // go to firebase and ble device
+                        _startFaceScan(
+                          name: name,
+                          startDate: DateTime.now().millisecondsSinceEpoch,
+                          endDate: DateTime.now().millisecondsSinceEpoch +
+                              (365 * 24 * 60 * 60 * 1000),
+                          isTimed: false,
+                        );
+                      },
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Start Scan & Save'),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green),
+                    ),
             ],
           ),
         );
@@ -243,10 +218,8 @@ class _FaceLockPageState extends State<FaceLockPage> {
 
   // ── TIMED dialog —> name + start + end datetime ──────────────────────────
   // default time -> 24 hrs
-  void _showTimedDialog(String faceNumber) {
+  void _showTimedDialog() {
     final nameCtrl = TextEditingController();
-
-    // Default: now → +24 hours
     DateTime startDt = DateTime.now();
     DateTime endDt = DateTime.now().add(const Duration(hours: 24));
 
@@ -254,35 +227,21 @@ class _FaceLockPageState extends State<FaceLockPage> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
-        bool saving = false;
+        bool scanning = false;
         return StatefulBuilder(
           builder: (ctx, setDlgState) => AlertDialog(
-            title: const Text('Timed Face Access'),
+            title: const Row(
+              children: [
+                Icon(Icons.timer, color: Colors.orange),
+                SizedBox(width: 8),
+                Text('Timed Face '),
+              ],
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // Success icon
-                  const Center(
-                    child: Icon(Icons.check_circle,
-                        color: Colors.green, size: 48),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Center(
-                    child: Text(
-                      'Face registered! ID: $faceNumber',
-                      style:
-                      const TextStyle(color: Colors.grey, fontSize: 11),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Name field
                   TextField(
                     controller: nameCtrl,
                     autofocus: true,
@@ -295,18 +254,14 @@ class _FaceLockPageState extends State<FaceLockPage> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Start datetime
                   const Text('Start Date & Time',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 6),
                   InkWell(
                     onTap: () async {
                       final picked = await _pickDateTime(ctx, startDt);
-                      if (picked != null) {
-                        setDlgState(() => startDt = picked);
-                      }
+                      if (picked != null) setDlgState(() => startDt = picked);
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -315,33 +270,24 @@ class _FaceLockPageState extends State<FaceLockPage> {
                         border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today,
-                              size: 16, color: Colors.indigo),
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatDateTime(startDt),
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ],
-                      ),
+                      child: Row(children: [
+                        const Icon(Icons.calendar_today,
+                            size: 16, color: Colors.indigo),
+                        const SizedBox(width: 8),
+                        Text(_formatDateTime(startDt),
+                            style: const TextStyle(fontSize: 14)),
+                      ]),
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
-                  // End datetime
                   const Text('End Date & Time',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 13)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 6),
                   InkWell(
                     onTap: () async {
                       final picked = await _pickDateTime(ctx, endDt);
-                      if (picked != null) {
-                        setDlgState(() => endDt = picked);
-                      }
+                      if (picked != null) setDlgState(() => endDt = picked);
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -350,87 +296,89 @@ class _FaceLockPageState extends State<FaceLockPage> {
                         border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_today,
-                              size: 16, color: Colors.orange),
-                          const SizedBox(width: 8),
-                          Text(
-                            _formatDateTime(endDt),
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ],
-                      ),
+                      child: Row(children: [
+                        const Icon(Icons.calendar_today,
+                            size: 16, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Text(_formatDateTime(endDt),
+                            style: const TextStyle(fontSize: 14)),
+                      ]),
                     ),
                   ),
-
-                  // Duration hint
                   const SizedBox(height: 8),
                   Text(
                     'Duration: ${_durationText(startDt, endDt)}',
                     style: TextStyle(
-                      color: endDt.isAfter(startDt)
-                          ? Colors.green
-                          : Colors.red,
+                      color: endDt.isAfter(startDt) ? Colors.green : Colors.red,
                       fontSize: 12,
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // Container(
+                  //   padding: const EdgeInsets.all(10),
+                  //   decoration: BoxDecoration(
+                  //     color: Colors.orange.shade50,
+                  //     borderRadius: BorderRadius.circular(8),
+                  //     border: Border.all(color: Colors.orange),
+                  //   ),
+                  //   child: const Text(
+                  //     'After tapping Start Scan, stand in front of the lock camera.',
+                  //     style: TextStyle(fontSize: 12, color: Colors.orange),
+                  //   ),
+                  // ),
                 ],
               ),
             ),
             actions: [
               TextButton(
-                onPressed: saving ? null : () => Navigator.pop(ctx),
+                onPressed: scanning ? null : () => Navigator.pop(ctx),
                 child: const Text('Cancel'),
               ),
-              saving
+              scanning
                   ? const Padding(
-                padding:
-                EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-                  : ElevatedButton(
-                onPressed: () async {
-                  final name = nameCtrl.text.trim();
-                  if (name.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter a name'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                    return;
-                  }
-                  if (!endDt.isAfter(startDt)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                            'End time must be after start time'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                    return;
-                  }
-                  setDlgState(() => saving = true);
-                  await _saveFaceToFirestore(
-                    faceNumber,
-                    name,
-                    startDt.millisecondsSinceEpoch,
-                    endDt.millisecondsSinceEpoch,
-                    true,
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  _setStatus(
-                    'Timed face saved for $name!\n${_formatDateTime(startDt)} → ${_formatDateTime(endDt)}',
-                    success: true,
-                  );
-                },
-                child: const Text('Save'),
-              ),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: () {
+                        final name = nameCtrl.text.trim();
+                        if (name.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please enter a name'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                          return;
+                        }
+                        if (!endDt.isAfter(startDt)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('End time must be after start time'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                          return;
+                        }
+                        setDlgState(() => scanning = true);
+                        Navigator.pop(ctx);
+                        _startFaceScan(
+                          name: name,
+                          startDate: startDt.millisecondsSinceEpoch,
+                          endDate: endDt.millisecondsSinceEpoch,
+                          isTimed: true,
+                        );
+                      },
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Start Scan & Save'),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange),
+                    ),
             ],
           ),
         );
@@ -438,9 +386,75 @@ class _FaceLockPageState extends State<FaceLockPage> {
     );
   }
 
+  // flow ------------------->
+  //FAB Click
+  //     ↓
+  // Dialog Opens
+  //     ↓
+  // User enters details
+  //     ↓
+  // Start BLE Face Scan
+  //     ↓
+  // Face Registered
+  //     ↓
+  // Save to Firebase
+  //     ↓
+  // UI Updates Automatically
+  void _startFaceScan({
+    required String name,
+    required int startDate,
+    required int endDate,
+    required bool isTimed,
+  }) {
+    _setStatus('Initializing face scan...', loading: true);
+
+    // This sends a BLE command to the physical lock.
+    // Lock camera starts.
+    // User stands in front.
+    TTLock.addFace(
+      null,
+      startDate,
+      endDate,
+      widget.lockData,
+
+      // Progress Callback
+      (TTFaceState state, TTFaceErrorCode faceErrorCode) {
+        if (state == TTFaceState.canStartAdd) {
+          _setStatus('Face detected! Hold still...', loading: true);
+        } else if (state == TTFaceState.error) {
+          _setStatus(_faceErrorMessage(faceErrorCode), loading: true);
+        }
+      },
+
+
+      // Success Callback
+      // only send -> faceNumber = 12 -> Face #12 enrolled
+      (String faceNumber) async {
+        // save to firebase
+        // Now:
+        // await _saveFaceToFirestore(...) runs -> save the user details/metadata to the firebase
+        // Only metadata stores -> firebase
+        // biometric template stays inside the TTLock lock -> ble device
+
+        // actual async await (industry standards)->
+        // means:
+        // Wait until Firebase saves metadata
+        // Then continue
+        // Without await:
+        // Show success
+        // Before Firebase finishes
+        await _saveFaceToFirestore(
+            faceNumber, name, startDate, endDate, isTimed);
+        _setStatus('Face saved for $name!', success: true);
+      },
+      (errorCode, errorMsg) {
+        _setStatus('Failed: $errorMsg ($errorCode)');
+      },
+    );
+  }
+
   // ── Pick date then time ────────────────────────────────────────────────
-  Future<DateTime?> _pickDateTime(
-      BuildContext ctx, DateTime initial) async {
+  Future<DateTime?> _pickDateTime(BuildContext ctx, DateTime initial) async {
     final date = await showDatePicker(
       context: ctx,
       initialDate: initial,
@@ -456,16 +470,27 @@ class _FaceLockPageState extends State<FaceLockPage> {
 
     if (time == null) return null;
 
-    return DateTime(
-        date.year, date.month, date.day, time.hour, time.minute);
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
   }
 
   // ── Format datetime for display ───────────────────────────────────────
   String _formatDateTime(DateTime dt) {
     final months = [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
+
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     return '${dt.day} ${months[dt.month]} ${dt.year}  $h:$m';
@@ -500,17 +525,16 @@ class _FaceLockPageState extends State<FaceLockPage> {
               TTLock.deleteFace(
                 faceNumber,
                 widget.lockData,
-                    () async {
+                () async {
                   await _deleteFaceFromFirestore(faceNumber);
                   _setStatus('Face deleted for $name', success: true);
                 },
-                    (errorCode, errorMsg) {
+                (errorCode, errorMsg) {
                   _setStatus('Failed: $errorMsg ($errorCode)');
                 },
               );
             },
-            child:
-            const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -536,17 +560,17 @@ class _FaceLockPageState extends State<FaceLockPage> {
               _setStatus('Clearing all faces...', loading: true);
               TTLock.clearFace(
                 widget.lockData,
-                    () async {
+                () async {
                   await _clearAllFacesFromFirestore();
                   _setStatus('All faces cleared!', success: true);
                 },
-                    (errorCode, errorMsg) {
+                (errorCode, errorMsg) {
                   _setStatus('Failed: $errorMsg ($errorCode)');
                 },
               );
             },
-            child: const Text('Clear All',
-                style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Clear All', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -617,30 +641,26 @@ class _FaceLockPageState extends State<FaceLockPage> {
       appBar: AppBar(
         title: Text(widget.isTimed ? 'Timed Face Lock' : 'Face Lock'),
         actions: [
-
           // delete all faces icon button
           // IconButton(
-          //   icon: const Icon(Icons.delete_sweep),
-          //   tooltip: 'Clear All',
-          //   onPressed: _loading ? null : _clearAllFaces,
+          // icon: const Icon(Icons.delete_sweep),
+          // tooltip: 'Clear All',
+          // onPressed: _loading ? null : _clearAllFaces,
           // ),
-
         ],
       ),
       body: Column(
         children: [
-
           // Status bar
           if (_status.isNotEmpty)
             Container(
               width: double.infinity,
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               color: _loading
                   ? Colors.blue.shade50
                   : _success
-                  ? Colors.green.shade50
-                  : Colors.red.shade50,
+                      ? Colors.green.shade50
+                      : Colors.red.shade50,
               child: Row(
                 children: [
                   if (_loading)
@@ -662,8 +682,8 @@ class _FaceLockPageState extends State<FaceLockPage> {
                         color: _loading
                             ? Colors.blue.shade800
                             : _success
-                            ? Colors.green.shade800
-                            : Colors.red.shade800,
+                                ? Colors.green.shade800
+                                : Colors.red.shade800,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -673,10 +693,11 @@ class _FaceLockPageState extends State<FaceLockPage> {
             ),
 
           // StreamBuilder -> Face list-> Realtime Firestore Updates
-          //1. Whenever a face is added:
-          //2. Firestore updates
-          //3. UI updates automatically
-          //4. No refresh button needed.
+          // StreamBuilder Magic -> This continuously listens to Firestore.
+          // 1. Whenever a face is added:
+          // 2. Firestore updates
+          // 3. UI updates automatically
+          // 4. No refresh button needed.
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _db
@@ -696,12 +717,10 @@ class _FaceLockPageState extends State<FaceLockPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.face,
-                            size: 80, color: Colors.grey.shade300),
+                        Icon(Icons.face, size: 80, color: Colors.grey.shade300),
                         const SizedBox(height: 16),
                         const Text('No faces registered yet.',
-                            style: TextStyle(
-                                color: Colors.grey, fontSize: 16)),
+                            style: TextStyle(color: Colors.grey, fontSize: 16)),
                         const SizedBox(height: 8),
                         const Text('Tap + Add Face to register.',
                             style: TextStyle(color: Colors.grey)),
@@ -718,40 +737,31 @@ class _FaceLockPageState extends State<FaceLockPage> {
                       child: Text(
                         '${faces.length} face(s) registered',
                         style: const TextStyle(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w500),
+                            color: Colors.grey, fontWeight: FontWeight.w500),
                       ),
                     ),
                     Expanded(
                       child: ListView.separated(
-                        padding:
-                        const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: faces.length,
-                        separatorBuilder: (_, __) =>
-                        const SizedBox(height: 8),
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
-                          final data =
-                          faces[i].data() as Map<String, dynamic>;
+                          final data = faces[i].data() as Map<String, dynamic>;
                           final faceNumber =
                               data['faceNumber'] as String? ?? '';
-                          final name =
-                              data['name'] as String? ?? 'Unknown';
-                          final isTimed =
-                              data['isTimed'] as bool? ?? false;
-                          final createdAt =
-                              data['createdAt'] as int? ?? 0;
+                          final name = data['name'] as String? ?? 'Unknown';
+                          final isTimed = data['isTimed'] as bool? ?? false;
+                          final createdAt = data['createdAt'] as int? ?? 0;
                           final endDate = data['endDate'] as int? ?? 0;
                           final date =
-                          DateTime.fromMillisecondsSinceEpoch(
-                              createdAt);
+                              DateTime.fromMillisecondsSinceEpoch(createdAt);
                           final dateStr =
                               '${date.day}/${date.month}/${date.year}';
 
                           // Check if timed key is expired
                           final isExpired = isTimed &&
                               endDate > 0 &&
-                              DateTime.now().millisecondsSinceEpoch >
-                                  endDate;
+                              DateTime.now().millisecondsSinceEpoch > endDate;
 
                           return Card(
                             child: ListTile(
@@ -759,12 +769,10 @@ class _FaceLockPageState extends State<FaceLockPage> {
                                 backgroundColor: isExpired
                                     ? Colors.grey
                                     : isTimed
-                                    ? Colors.orange
-                                    : Colors.indigo,
+                                        ? Colors.orange
+                                        : Colors.indigo,
                                 child: Text(
-                                  name.isNotEmpty
-                                      ? name[0].toUpperCase()
-                                      : '?',
+                                  name.isNotEmpty ? name[0].toUpperCase() : '?',
                                   style: const TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.bold),
@@ -784,28 +792,23 @@ class _FaceLockPageState extends State<FaceLockPage> {
                                         color: isExpired
                                             ? Colors.grey
                                             : Colors.orange,
-                                        borderRadius:
-                                        BorderRadius.circular(4),
+                                        borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
                                         isExpired ? 'Expired' : 'Timed',
                                         style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10),
+                                            color: Colors.white, fontSize: 10),
                                       ),
                                     ),
                                 ],
                               ),
                               subtitle: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('ID: $faceNumber',
-                                      style:
-                                      const TextStyle(fontSize: 11)),
+                                      style: const TextStyle(fontSize: 11)),
                                   Text('Added: $dateStr',
-                                      style:
-                                      const TextStyle(fontSize: 11)),
+                                      style: const TextStyle(fontSize: 11)),
                                   if (isTimed && endDate > 0)
                                     Text(
                                       'Expires: ${_formatDateTime(DateTime.fromMillisecondsSinceEpoch(endDate))}',
@@ -836,17 +839,16 @@ class _FaceLockPageState extends State<FaceLockPage> {
                                   //     Text('Rename'),
                                   //   ]),
                                   // ),
-                                  // const PopupMenuItem(
-                                  //   value: 'delete',
-                                  //   child: Row(children: [
-                                  //     Icon(Icons.delete,
-                                  //         size: 18, color: Colors.red),
-                                  //     SizedBox(width: 8),
-                                  //     Text('Delete',
-                                  //         style: TextStyle(
-                                  //             color: Colors.red)),
-                                  //   ]),
-                                  // ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(children: [
+                                      Icon(Icons.delete,
+                                          size: 18, color: Colors.red),
+                                      SizedBox(width: 8),
+                                      Text('Delete',
+                                          style: TextStyle(color: Colors.red)),
+                                    ]),
+                                  ),
                                 ],
                               ),
                             ),
@@ -861,28 +863,30 @@ class _FaceLockPageState extends State<FaceLockPage> {
           ),
         ],
       ),
-
+      // step -> 1
+      // user click floating action button
+      // Add Face+ -> Flutter calls: _addFace();
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _loading ? null : _addFace,
         backgroundColor: _loading
             ? Colors.grey
             : widget.isTimed
-            ? Colors.orange
-            : Colors.green,
+                ? Colors.orange
+                : Colors.green,
         icon: _loading
             ? const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: Colors.white))
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
             : Icon(widget.isTimed
-            ? Icons.timer
-            : Icons.face_retouching_natural_outlined),
+                ? Icons.timer
+                : Icons.face_retouching_natural_outlined),
         label: Text(_loading
             ? 'Scanning...'
             : widget.isTimed
-            ? 'Add Timed Face'
-            : 'Add Face+'),
+                ? 'Add Timed Face'
+                : 'Add Face+'),
       ),
     );
   }
@@ -893,3 +897,39 @@ class _FaceLockPageState extends State<FaceLockPage> {
 // Firestore stores metadata.
 // BLE handles enrollment.
 // UI updates in real time.
+
+// Flow A to Z ->
+// Open Face Page
+//         ↓
+// Tap Add Face
+//         ↓
+// Dialog Opens
+//         ↓
+// Enter Name
+//         ↓
+// Choose Time (if timed)
+//         ↓
+// Start Scan
+//         ↓
+// TTLock.addFace()
+//         ↓
+// BLE Communication
+//         ↓
+// Lock Captures Face
+//         ↓
+// Returns faceNumber
+//         ↓
+// Save Metadata to Firestore
+//         ↓
+// StreamBuilder Updates UI
+//         ↓
+// Face Appears In List
+
+// ble side flow ->
+// TTLock Lock stores the actual face biometric.
+//
+// Firestore stores only:
+// - name
+// - faceNumber
+// - dates
+// - owner info
