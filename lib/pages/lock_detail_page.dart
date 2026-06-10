@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:smartlock/pages/passcode_page.dart';
+import 'package:smartlock/pages/passcode_timed_page.dart';
 import 'package:ttlock_flutter/ttlock.dart';
 import '../models/lock_model.dart';
 import '../models/ekey_model.dart';
@@ -30,7 +32,6 @@ class _LockDetailPageState extends State<LockDetailPage> {
   }
 
   void _resetL() async {
-
     // Show confirmation first
     final confirm = await showDialog<bool>(
       context: context,
@@ -58,10 +59,11 @@ class _LockDetailPageState extends State<LockDetailPage> {
 
     TTLock.resetLock(
       widget.lock.lockData,
-          () async {
+      () async {
 
         // ── Delete lock + subcollections from Firestore ──
         try {
+
           // Delete all faces
           final facesSnap = await FirebaseFirestore.instance
               .collection('locks')
@@ -86,7 +88,6 @@ class _LockDetailPageState extends State<LockDetailPage> {
               .collection('locks')
               .doc(widget.lock.lockId)
               .delete();
-
         } catch (e) {
           debugPrint('Firestore cleanup error: $e');
         }
@@ -99,17 +100,18 @@ class _LockDetailPageState extends State<LockDetailPage> {
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (_) => const HomePage()),
-                (route) => false,
+            (route) => false,
           );
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Lock reset successfully. You can now re-initialize it.'),
+              content: Text(
+                  'Lock reset successfully. You can now re-initialize it.'),
               backgroundColor: Colors.green,
             ),
           );
         }
       },
-          (errorCode, errorMsg) {
+      (errorCode, errorMsg) {
         if (mounted) Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -172,6 +174,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
               TextField(
                 controller: emailCtrl,
                 keyboardType: TextInputType.emailAddress,
@@ -193,13 +196,16 @@ class _LockDetailPageState extends State<LockDetailPage> {
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
+
                 items: const [
                   DropdownMenuItem(
                       value: 'permanent', child: Text('Permanent')),
-                  DropdownMenuItem(value: 'timed', child: Text('Timed (30 days)')),
+                  DropdownMenuItem(
+                      value: 'timed', child: Text('Timed (30 days)')),
                 ],
                 onChanged: (v) => setDlgState(() => keyType = v!),
               ),
+
               if (dialogError != null) ...[
                 const SizedBox(height: 8),
                 Text(dialogError!,
@@ -241,7 +247,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
                           Navigator.pop(ctx);
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Ekey sent to $email'),
+                              content: Text('eKey sent to $email'),
                               backgroundColor: Colors.green,
                             ),
                           );
@@ -285,11 +291,8 @@ class _LockDetailPageState extends State<LockDetailPage> {
                       Text(widget.lock.lockName,
                           style: const TextStyle(
                               fontSize: 18, fontWeight: FontWeight.bold)),
-                    ]
-                    ),
-
+                    ]),
                     const Divider(height: 20),
-
                     Text('MAC: ${widget.lock.lockMac}',
                         style: const TextStyle(color: Colors.grey)),
                     Text('ID: ${widget.lock.lockId}',
@@ -337,7 +340,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
             ElevatedButton.icon(
               onPressed: _showSendEkeyDialog,
               icon: const Icon(Icons.send),
-              label: const Text('Send Ekey to User'),
+              label: const Text('Send eKey to User'),
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
             ),
 
@@ -351,15 +354,12 @@ class _LockDetailPageState extends State<LockDetailPage> {
                   builder: (_) => FaceLockPage(
                     lockData: widget.lock.lockData,
                     lockName: widget.lock.lockName,
-                    lockId: widget.lock.lockId,   // ← pass lockId for Firestore
+                    lockId: widget.lock.lockId, // ← pass lockId for Firestore
                   ),
                 ),
               ),
-
               icon: const Icon(Icons.face),
-
               label: const Text('Add Face Lock'),
-
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepPurple,
                 minimumSize: const Size(double.infinity, 52),
@@ -377,7 +377,7 @@ class _LockDetailPageState extends State<LockDetailPage> {
                     lockData: widget.lock.lockData,
                     lockName: widget.lock.lockName,
                     lockId: widget.lock.lockId,
-                    isTimed: true,   // ← THIS is the only difference
+                    isTimed: true, // ← THIS is the only difference
                   ),
                 ),
               ),
@@ -399,11 +399,53 @@ class _LockDetailPageState extends State<LockDetailPage> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
             ),
 
+            const SizedBox(height: 12),
+
+            // set passcode
+            ElevatedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PasscodePage(
+                    lockId: widget.lock.lockId,
+                    lockData: widget.lock.lockData,
+                    lockName: widget.lock.lockName,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.password),
+              label: const Text('Set Passcode'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // set timed passcode
+            ElevatedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PasscodePageTimed(
+                      lockId: widget.lock.lockId,
+                      lockData: widget.lock.lockData,
+                      lockName: widget.lock.lockName
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.timer),
+              label: const Text('Set Timed Passcode'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey,
+              ),
+            ),
+
             const SizedBox(height: 20),
 
             // Sent ekeys list history down below buttons
             const Text(
-              'Sent Ekeys History-',
+              'Sent eKeys History-',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
 
@@ -431,10 +473,9 @@ class _LockDetailPageState extends State<LockDetailPage> {
                       return Card(
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor:
-                                ekey.status == 'active'
-                                    ? Colors.green
-                                    : Colors.grey,
+                            backgroundColor: ekey.status == 'active'
+                                ? Colors.green
+                                : Colors.grey,
                             radius: 18,
                             child: const Icon(Icons.vpn_key,
                                 color: Colors.white, size: 18),
@@ -458,7 +499,6 @@ class _LockDetailPageState extends State<LockDetailPage> {
                                       ));
                                     }
                                   },
-
                                   child: const Text('Revoke',
                                       style: TextStyle(color: Colors.red)),
                                 )

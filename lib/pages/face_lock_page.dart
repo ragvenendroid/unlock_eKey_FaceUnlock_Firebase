@@ -933,3 +933,48 @@ class _FaceLockPageState extends State<FaceLockPage> {
 // - faceNumber
 // - dates
 // - owner info
+
+//_startFaceScan(...) -> is basically packing all the information collected
+// from the dialog and sending it to the face enrollment function. It doesn't
+// scan the face itself; it passes the user's inputs (name, start time,
+// end time, timed/permanent flag) to the function that starts the TTLock BLE
+// face enrollment process.
+
+// Changing values in Flutter or Firebase afterward does NOT
+// reconfigure the face inside the lock.
+// You were only changing metadata.
+// The physical lock doesn't read Firestore.
+
+//NEW FLOW
+//
+// Now your flow is:
+//
+// Tap Add Face
+//       ↓
+// _showTimedDialog()
+//       ↓
+// User chooses 2PM-5PM
+//       ↓
+// _startFaceScan()
+//       ↓
+// TTLock.addFace(
+//        startDate=2PM,
+//        endDate=5PM
+//      )
+//       ↓
+// Face Enrolled
+//
+// Look carefully.
+//
+// Now the lock receives:
+//
+// TTLock.addFace(
+//   null,
+//   2PM,
+//   5PM,
+//   widget.lockData,
+//   ...
+// )
+//
+// BEFORE enrollment.
+
